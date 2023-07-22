@@ -1,54 +1,87 @@
+import datetime
+import select
 import socket
-import threading
 import sys
+import threading
 
-class Node:
+DATA_LENGTH = 128
 
-    def __init__(self, name: str, my_addr: tuple[str, int], neighbor_addr_list: list[tuple[str, int]]):
-        self.name = name
-        self.my_addr = my_addr
-        self.neighbor_addr_list = neighbor_addr_list
-
-def receiver(lock: threading.Lock, skt: socket.socket, node: Node) -> None:
-    while True:
-        # 64 KiB buffer
-        data, addr = skt.recvfrom(64 * 1024)
-        packet = data.decode()
-        header, content = packet[0], packet[1:]
-        # connection packet
-        if header == 'C':
-            with lock:
-                node.neighbor_addr_list.append(addr)
-        # message packet
-        elif header == 'M':
-            with lock:
-                print(content)
-                for neighbor_addr in node.neighbor_addr_list:
-                    if neighbor_addr != addr:
-                        skt.sendto(('M' + content).encode(), neighbor_addr)
-        # unrecognized packet
-        else:
-            pass
-
-def start_node(name: str, my_addr: tuple[str, int], inviter_addr: tuple[str, int]) -> None:
-    lock = threading.Lock()
-    skt = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    skt.bind(my_addr)
-    if inviter_addr[0] == 'start':
-        node = Node(name, my_addr, [])
+def pad_data(data: bytes, data_length: int) -> bytes:
+    if len(data) > data_length:
+        return data[:data_length]
     else:
-        node = Node(name, my_addr, [inviter_addr])
-        skt.sendto('C'.encode(), inviter_addr)
-    threading.Thread(target = receiver, args = (lock, skt, node)).start()
+        return data + (b' ' * (data_length - len(data)))
+
+def send_data(client_socket: socket.socket, data: bytes) -> None:
+    data_length = len(data)
+    sent = 0
+    while sent < data_length:
+        sent += client_socket.send(data[sent:])
+
+def receive_data(client_socket: socket.socket,
+                 data_length: int) -> bytes:
+    data = b''
+    while len(data) < data_length:
+        data += client_socket.recv(data_length - len(data))
+    return data
+
+def listener(lock: threading.Lock, server_socket: socket.socket,
+             neighbor_sockets: list[socket.socket]) -> None:
+    server_socket.listen(5)
     while True:
-        message = input()
+        client_socket, _ = server_socket.accept()
         with lock:
-            named_message = f'[Message from {name}] ' + message
-            print(named_message)
-            for neighbor_addr in node.neighbor_addr_list:
-                skt.sendto(('M' + named_message).encode(), neighbor_addr)
+            neighbor_sockets.append(client_socket)
+            sys.stderr.write('* Accepted a new connection\n')
+
+def relayer(lock: threading.Lock,
+            neighbor_sockets: list[socket.socket]) -> None:
+    while True:
+        with lock:
+            if neighbor_sockets:
+                ready_to_read, _, __ = select.select(neighbor_sockets,
+                                                 [], [], 0)
+                if ready_to_read:
+                    for source_socket in ready_to_read:
+                        data = receive_data(source_socket, DATA_LENGTH)
+                        sys.stderr.write('* Received data\n')
+                        message = data.decode().strip()
+                        print(message)
+                        for neighbor_socket in neighbor_sockets:
+                            if (source_socket.getsockname()
+                                != neighbor_socket.getsockname()):
+                                send_data(neighbor_socket, data)
+                        sys.stderr.write('* Relayed data\n')
+
+def start_node(name: str, my_addr: tuple[str, int],
+               inviter_addr: tuple[str, int]) -> None:
+    lock = threading.Lock()
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind(my_addr)
+    neighbor_sockets = []
+    if inviter_addr[0] != 'start':
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect(inviter_addr)
+        sys.stderr.write('* Connected to the inviter\n')
+        neighbor_sockets.append(client_socket)
+    threading.Thread(target = listener,
+                     args = (lock, server_socket, neighbor_sockets)).start()
+    threading.Thread(target = relayer,
+                     args = (lock, neighbor_sockets)).start()
+    while True:
+        content = input()
+        utctime = datetime.datetime.utcnow()
+        message = f'[{name} sent at {utctime} (UTC)]: {content}'
+        data = pad_data(message.encode(), DATA_LENGTH)
+        with lock:
+            print(message)
+            for neighbor_socket in neighbor_sockets:
+                send_data(neighbor_socket, data)
+            sys.stderr.write('* Sent data\n')
 
 if __name__ == '__main__':
     if len(sys.argv) != 6:
-        sys.exit(f'Usage: python3 {sys.argv[0]} <name> <my-ip> <my-port> <inviter-ip> <inviter-port>')
-    start_node(sys.argv[1], (sys.argv[2], int(sys.argv[3])), (sys.argv[4], int(sys.argv[5])))
+        sys.exit(f'Usage: python3 {sys.argv[0]}'
+                  ' <name> <my-ip> <my-port> <inviter-ip> <inviter-port>')
+    start_node(sys.argv[1], (sys.argv[2], int(sys.argv[3])),
+                            (sys.argv[4], int(sys.argv[5])))
