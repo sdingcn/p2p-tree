@@ -1,4 +1,4 @@
-# p2p-message
+# p2p-tree
 
 This is a peer-to-peer (P2P) group messaging implementation.
 All participants are "nodes" where each node is an instance
