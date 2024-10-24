@@ -1,4 +1,4 @@
-# p2p-tree
+# p2p-tree (work in progress)
 
 This is a peer-to-peer (P2P) group message application based on TCP.
 Group members are "nodes" where every node is an instance
@@ -7,6 +7,7 @@ Groups are formed by invitations and each member only maintains
 connections with its invited members and the member that invited it.
 The first member of a group has no inviter.
 A group's topology is a tree and messages are relayed by nodes on the tree.
+Packets (over TCP) are of fixed-length (128 bytes).
 
 ## Dependency
 
