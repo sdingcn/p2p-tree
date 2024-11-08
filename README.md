@@ -1,4 +1,4 @@
-# p2p-tree (work in progress)
+# p2p-tree (**work in progress**)
 
 This is a peer-to-peer (P2P) group message application based on TCP.
 Group members are "nodes" where every node is an instance
