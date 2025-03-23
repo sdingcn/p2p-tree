@@ -1,4 +1,4 @@
-# p2p-tree (**work in progress**)
+# p2p-tree
 
 This is a peer-to-peer (P2P) group message application based on TCP.
 Group members are "nodes" where every node is an instance
@@ -22,11 +22,12 @@ python3 src/node.py <name> <my-ip> <my-port> [inviter-ip] [inviter-port]
 ```
 
 where the first node's inviter should be omitted.
-Then you can type a line and press `Enter`
+Then you can type a line of message (see exceptions below) and press `Enter`
 to send the line to all nodes on the tree.
 At the same time any message sent by any node on the tree
 is displayed on every node's `stdout`.
 Certain control information is printed to `stderr`.
+A special input line `inspect` lists all neighbors of the current node.
 An empty input line terminates the current node.
 Note that the termination of a node may split the group (tree)
 into multiple smaller groups.
