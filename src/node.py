@@ -3,6 +3,7 @@ import select
 import socket
 import sys
 import threading
+import time
 import typing
 
 SOCKET_CONNECTION_TIMEOUT_SECONDS = 10
@@ -60,8 +61,9 @@ def listener(lock: threading.Lock, server_socket: socket.socket,
         # check the halting condition
         with lock:
             if HALTED:
-                sys.stderr.write(make_header() + f' listener rounds: {round_ctr}\n')
-                sys.stderr.write(make_header() + f' listener accepts: {accept_ctr}\n')
+                sys.stderr.write(make_header() +
+                                 f' listener rounds = {round_ctr}' +
+                                 f' listener accepts = {accept_ctr}\n')
                 return
         # try to accept new connections
         try:
@@ -83,12 +85,15 @@ def relayer(lock: threading.Lock, neighbors: list[Neighbor]) -> None:
     write_ctr = 0
     while True:
         round_ctr += 1
+        # avoid busy waiting
+        time.sleep(SOCKET_OPERATION_TIMEOUT_SECONDS)
         # check the halting condition
         with lock:
             if HALTED:
-                sys.stderr.write(make_header() + f' relayer rounds: {round_ctr}\n')
-                sys.stderr.write(make_header() + f' relayer read bytes: {read_ctr}\n')
-                sys.stderr.write(make_header() + f' relayer write bytes: {write_ctr}\n')
+                sys.stderr.write(make_header() +
+                                 f' relayer rounds = {round_ctr}' +
+                                 f' relayer read bytes = {read_ctr}' +
+                                 f' relayer write bytes = {write_ctr}\n')
                 return
         # obtain a list of current sockets
         # note: the listener may add new neighbor objects to "neighbors"
@@ -196,10 +201,6 @@ def start_node(name: str, my_addr: tuple[str, int],
             listener_thread.join()
             relayer_thread.join()
             return
-        elif content == 'inspect':
-            with lock:
-                for neighbor in neighbors:
-                    print(neighbor)
         else:
             message = make_header(name) + content
             data = make_packet(message.encode())
