@@ -4,6 +4,9 @@ import socket
 import sys
 import threading
 import time
+import tkinter
+import tkinter.scrolledtext
+import tkinter.ttk
 import typing
 
 SOCKET_CONNECTION_TIMEOUT_SECONDS = 10
@@ -78,7 +81,8 @@ def listener(lock: threading.Lock, server_socket: socket.socket,
         except TimeoutError:
             pass
 
-def relayer(lock: threading.Lock, neighbors: list[Neighbor]) -> None:
+def relayer(lock: threading.Lock, neighbors: list[Neighbor],
+            display_area: tkinter.scrolledtext.ScrolledText) -> None:
     global PACKET_LENGTH_BYTES, HALTED
     round_ctr = 0
     read_ctr = 0
@@ -124,7 +128,7 @@ def relayer(lock: threading.Lock, neighbors: list[Neighbor]) -> None:
                 if len(neighbor.read_buffer) >= PACKET_LENGTH_BYTES:
                     packet = neighbor.read_buffer[:PACKET_LENGTH_BYTES]
                     neighbor.read_buffer = neighbor.read_buffer[PACKET_LENGTH_BYTES:]
-                    print(packet.decode().strip())
+                    display_area.insert(tkinter.INSERT, packet.decode().strip() + '\n')
                     for other in neighbors:
                         if id(other.so) != sid:
                             other.write_buffer += packet
@@ -179,7 +183,7 @@ def start_node(name: str, my_addr: tuple[str, int],
         sys.stderr.write(make_header() + f'connected to the inviter ({inviter_addr})\n')
         client_socket.settimeout(SOCKET_OPERATION_TIMEOUT_SECONDS)
         neighbors.append(Neighbor(client_socket, inviter_addr, b'', b''))
-    # start the current node's server part
+    # start the current node's listener part
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.settimeout(SOCKET_OPERATION_TIMEOUT_SECONDS)
@@ -188,26 +192,47 @@ def start_node(name: str, my_addr: tuple[str, int],
     lock = threading.Lock()
     listener_thread = threading.Thread(target = listener, args = (lock, server_socket, neighbors))
     listener_thread.start()
-    relayer_thread = threading.Thread(target = relayer, args = (lock, neighbors))
+    # start the GUI and the node's relayer part
+    root = tkinter.Tk()
+    root.title(f'{name} ({my_addr[0]}:{my_addr[1]})')
+    tkinter.Grid.rowconfigure(root, 0, weight = 1)
+    tkinter.Grid.rowconfigure(root, 1, weight = 1)
+    tkinter.Grid.columnconfigure(root, 0, weight = 1)
+    tkinter.Grid.columnconfigure(root, 1, weight = 1)
+    display_area = tkinter.scrolledtext.ScrolledText(root)
+    display_area.bind('<Key>', lambda e: 'break')
+    display_area.grid(row = 0, column = 0, columnspan = 2, sticky = 'NSEW')
+    entry_label = tkinter.ttk.Label(root, text = 'Type your message and hit Enter to send it: ')
+    entry_label.grid(row = 1, column = 0, sticky = 'NSEW')
+    entry_variable = tkinter.StringVar()
+    entry_area = tkinter.Entry(root, textvariable = entry_variable)
+    entry_area.grid(row = 1, column = 1, sticky = 'NSEW')
+    def handle_input(event: tkinter.Event) -> None:
+        nonlocal display_area, entry_variable
+        nonlocal lock, name, neighbors
+        entry_text = entry_variable.get()
+        entry_variable.set('')
+        message = make_header(name) + entry_text
+        data = make_packet(message.encode())
+        with lock:
+            display_area.insert(tkinter.INSERT, message + '\n')
+            for neighbor in neighbors:
+                neighbor.write_buffer += data  # append data to all neighbor nodes' buffers
+    entry_area.bind('<Key-Return>', handle_input)
+    def exit_program() -> None:
+        global HALTED
+        nonlocal root
+        nonlocal listener_thread, lock, relayer_thread
+        with lock:
+            HALTED = True
+        listener_thread.join()
+        relayer_thread.join()
+        root.destroy()
+    relayer_thread = threading.Thread(target = relayer, args = (lock, neighbors, display_area))
     relayer_thread.start()
-    # start handling user inputs
-    while True:
-        content = input()
-        if content == '':
-            # set the halting condition
-            with lock:
-                HALTED = True
-            # wait for the other two threads
-            listener_thread.join()
-            relayer_thread.join()
-            return
-        else:
-            message = make_header(name) + content
-            data = make_packet(message.encode())
-            with lock:
-                print(message)
-                for neighbor in neighbors:
-                    neighbor.write_buffer += data  # send data to all neighbor nodes
+    entry_area.focus_set()
+    root.protocol('WM_DELETE_WINDOW', exit_program)
+    root.mainloop()
 
 if __name__ == '__main__':
     if (len(sys.argv) != 4) and (len(sys.argv) != 6):

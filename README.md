@@ -24,12 +24,11 @@ python3 src/node.py <name> <my-ip> <my-port> [inviter-ip] [inviter-port]
 ```
 
 where the first node's inviter should be omitted.
-Then you can type a line of message (see exceptions below) and press `Enter`
-to send the line to all nodes on the tree.
+Then a GUI will appear where you can type a line of message
+and press `Enter` to send the line to all nodes on the tree.
 At the same time any message sent by any node on the tree
-is displayed on every node's `stdout`.
+is displayed in the display area.
 Certain control information is printed to `stderr`.
-An empty input line terminates the current node.
 Note that the termination of a node may split the group (tree)
 into multiple smaller groups.
 
