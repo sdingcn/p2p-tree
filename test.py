@@ -6,7 +6,7 @@ class P2PTreeTestError(Exception):
     pass
 
 def launch(config: list[str]) -> subprocess.Popen:
-    return subprocess.Popen(args = ['python3', 'src/node.py'] + config,
+    return subprocess.Popen(args = ['python3', 'node.py', 'cli'] + config,
                             stdin = subprocess.PIPE,
                             stdout = subprocess.PIPE,
                             stderr = subprocess.PIPE,
@@ -29,7 +29,7 @@ def nap() -> None:
 
 def p2p_tree_test_one_node() -> bool:
     try:
-        a = launch(['A', '127.0.0.1', '8001'])
+        a = launch(['A', '127.0.0.1', '10001'])
         nap()
         write_line(a, 'This is A')
         verify_out_line(a, 'This is A')
@@ -44,9 +44,9 @@ def p2p_tree_test_one_node() -> bool:
 
 def p2p_tree_test_two_nodes() -> bool:
     try:
-        a = launch(['A', '127.0.0.1', '8001'])
+        a = launch(['A', '127.0.0.1', '10001'])
         nap()
-        b = launch(['B', '127.0.0.1', '8002', '127.0.0.1', '8001'])
+        b = launch(['B', '127.0.0.1', '10002', '127.0.0.1', '10001'])
         nap()
         verify_err_line(a, 'accepted')
         verify_err_line(b, 'connected')
@@ -72,7 +72,6 @@ def p2p_tree_test_two_nodes() -> bool:
         return False
 
 if __name__ == '__main__':
-    sys.exit('This is a script to test the previous CLI version of p2p-tree.')
     global_dict = globals().copy()
     for k, v in global_dict.items():
         if k.startswith('p2p_tree_test'):

@@ -2,40 +2,34 @@
 
 This is a peer-to-peer (P2P) group message application based on TCP.
 Group members are "nodes" where every node is an instance
-of the program (`src/node.py`) and acts as both server and client.
+of the program (`node.py`) and acts as both server and client.
 Groups are formed by invitations and each member only maintains
 connections with its invited members and the member that invited it.
 The first member of a group has no inviter.
 A group's topology is a tree and messages are relayed by nodes on the tree.
-Packets (over TCP) are of fixed-length (128 bytes).
-
-## Dependency
-
-Python >= 3.10
-
-IPv4
 
 ## Usage
 
-Launch a node by
+There are two modes of usage: GUI and CLI.
+GUI supports one-line messages (including empty lines)
+while CLI only supports non-empty one-line messages
+because empty lines are used to signal termination.
+Run `python3 node.py` to see the detailed arguments to launch a node.
 
-```
-python3 src/node.py <name> <my-ip> <my-port> [inviter-ip] [inviter-port]
-```
+## Dependency
 
-where the first node's inviter should be omitted.
-Then a GUI will appear where you can type a line of message
-and press `Enter` to send the line to all nodes on the tree.
-At the same time any message sent by any node on the tree
-is displayed in the display area.
-Certain control information is printed to `stderr`.
-Note that the termination of a node may split the group (tree)
++ Python >= 3.10
++ IPv4
+
+## Packets
+
+Packets (over TCP) are of fixed-length (128 bytes).
+
+## Stability
+
+The disconnection of one node may split the group (tree)
 into multiple smaller groups.
 
-## About NAT
+## NAT
 
-This program does not implement NAT hole punching.
-You can of course form a group inside a LAN,
-but if you want to form a group over the Internet
-then at least one peer should have a public IP address
-where other peers can connect to.
+NAT hole punching is not supported.

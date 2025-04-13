@@ -27,6 +27,10 @@ def make_header(name: typing.Union[None, str] = None) -> str:
     time_str = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M:%S')
     return f'({name} {time_str}) '
 
+def dump_to_stderr(s: str) -> None:
+    sys.stderr.write(make_header() + s)
+    sys.stderr.flush()
+
 def make_packet(data: bytes) -> bytes:
     '''
     Packets are truncated/padded to a fixed-size.
@@ -64,9 +68,8 @@ def listener(lock: threading.Lock, server_socket: socket.socket,
         # check the halting condition
         with lock:
             if HALTED:
-                sys.stderr.write(make_header() +
-                                 f' listener rounds = {round_ctr}' +
-                                 f' listener accepts = {accept_ctr}\n')
+                dump_to_stderr(f' listener rounds = {round_ctr}'
+                               f' listener accepts = {accept_ctr}\n')
                 return
         # try to accept new connections
         try:
@@ -75,14 +78,13 @@ def listener(lock: threading.Lock, server_socket: socket.socket,
             client_socket.settimeout(SOCKET_OPERATION_TIMEOUT_SECONDS)
             with lock:
                 neighbors.append(Neighbor(client_socket, client_addr, b'', b''))
-                sys.stderr.write(make_header() +
-                                 f'accepted a new connection from {client_addr}\n')
+                dump_to_stderr(f'accepted a new connection from {client_addr}\n')
             accept_ctr += 1
         except TimeoutError:
             pass
 
 def relayer(lock: threading.Lock, neighbors: list[Neighbor],
-            display_area: tkinter.scrolledtext.ScrolledText) -> None:
+            output: typing.Callable[[str], None]) -> None:
     global PACKET_LENGTH_BYTES, HALTED
     round_ctr = 0
     read_ctr = 0
@@ -94,10 +96,9 @@ def relayer(lock: threading.Lock, neighbors: list[Neighbor],
         # check the halting condition
         with lock:
             if HALTED:
-                sys.stderr.write(make_header() +
-                                 f' relayer rounds = {round_ctr}' +
-                                 f' relayer read bytes = {read_ctr}' +
-                                 f' relayer write bytes = {write_ctr}\n')
+                dump_to_stderr(f' relayer rounds = {round_ctr}'
+                               f' relayer read bytes = {read_ctr}'
+                               f' relayer write bytes = {write_ctr}\n')
                 return
         # obtain a list of current sockets
         # note: the listener may add new neighbor objects to "neighbors"
@@ -128,7 +129,7 @@ def relayer(lock: threading.Lock, neighbors: list[Neighbor],
                 if len(neighbor.read_buffer) >= PACKET_LENGTH_BYTES:
                     packet = neighbor.read_buffer[:PACKET_LENGTH_BYTES]
                     neighbor.read_buffer = neighbor.read_buffer[PACKET_LENGTH_BYTES:]
-                    display_area.insert(tkinter.INSERT, packet.decode().strip() + '\n')
+                    output(packet.decode().strip() + '\n')
                     for other in neighbors:
                         if id(other.so) != sid:
                             other.write_buffer += packet
@@ -160,18 +161,103 @@ def relayer(lock: threading.Lock, neighbors: list[Neighbor],
             remaining_neighbors = []
             for neighbor in neighbors:
                 if id(neighbor.so) in dead_sids:
-                    sys.stderr.write(make_header() +
-                                     f'detected the disconnection of {neighbor.remote_addr}\n')
+                    dump_to_stderr(f'detected the disconnection of {neighbor.remote_addr}\n')
                 else:
                     remaining_neighbors.append(neighbor)
             neighbors.clear()
             neighbors.extend(remaining_neighbors)
 
-def start_node(name: str, my_addr: tuple[str, int],
-               inviter_addr: typing.Union[None, tuple[str, int]]) -> None:
+def stop_and_wait(lock: threading.Lock,
+                 listener_thread: typing.Union[None, threading.Thread],
+                 relayer_thread: typing.Union[None, threading.Thread]) -> None:
     global HALTED
-    neighbors = []  # shared between all three threads of this node
-    # try to connect to the inviter (if there is one)
+    with lock:
+        HALTED = True
+    if listener_thread:
+        listener_thread.join()
+    if relayer_thread:
+        relayer_thread.join()
+
+def gui_loop(name: str, neighbors: list[Neighbor], lock: threading.Lock,
+             listener_thread: typing.Union[None, threading.Thread]) -> None:
+    root = tkinter.Tk()
+    root.title('p2p-tree')
+    root.resizable(False, False)
+    # root.attributes('-alpha', 0.8)
+    root.rowconfigure(0, weight = 1)
+    root.columnconfigure(0, weight = 1)
+    frm = tkinter.ttk.Frame(root, padding = 5, borderwidth = 5, relief = 'ridge')
+    frm.grid(row = 0, column = 0, padx = 5, pady = 5)
+    frm.rowconfigure(0, weight = 1)
+    frm.rowconfigure(1, weight = 1)
+    frm.columnconfigure(0, weight = 1)
+    display_area = tkinter.scrolledtext.ScrolledText(frm)
+    display_area.bind('<Key>', lambda e: 'break')
+    display_area.grid(row = 0, column = 0, sticky = 'NSEW')
+    entry_variable = tkinter.StringVar()
+    entry_area = tkinter.Entry(frm, textvariable = entry_variable, borderwidth = 3,
+                               relief = 'ridge')
+    entry_area.grid(row = 1, column = 0, sticky = 'NSEW')
+
+    def handle_input(event: tkinter.Event) -> None:
+        nonlocal display_area, entry_variable, name, neighbors, lock
+        entry_text = entry_variable.get()
+        entry_variable.set('')
+        message = make_header(name) + entry_text
+        data = make_packet(message.encode())
+        with lock:
+            display_area.insert(tkinter.INSERT, message + '\n')
+            for neighbor in neighbors:
+                neighbor.write_buffer += data  # append data to all neighbor nodes' buffers
+
+    entry_area.bind('<Key-Return>', handle_input)
+
+    def gui_output(s: str) -> None:
+        nonlocal display_area
+        display_area.insert(tkinter.INSERT, s)
+
+    # start the current node's relayer part
+    relayer_thread = threading.Thread(target = relayer, args = (lock, neighbors, gui_output))
+    relayer_thread.start()
+
+    def exit_loop() -> None:
+        nonlocal lock, listener_thread, relayer_thread, root
+        stop_and_wait(lock, listener_thread, relayer_thread)
+        root.destroy()
+
+    root.protocol('WM_DELETE_WINDOW', exit_loop)
+    entry_area.focus_set()
+    root.mainloop()
+
+def cli_loop(name: str, neighbors: list[Neighbor], lock: threading.Lock,
+             listener_thread: typing.Union[None, threading.Thread]) -> None:
+
+    def cli_output(s: str) -> None:
+        sys.stdout.write(s)
+        sys.stdout.flush()
+
+    # start the current node's relayer part
+    relayer_thread = threading.Thread(target = relayer, args = (lock, neighbors, cli_output))
+    relayer_thread.start()
+    while True:
+        content = input()
+        if content == '':
+            stop_and_wait(lock, listener_thread, relayer_thread)
+            return
+        else:
+            message = make_header(name) + content
+            data = make_packet(message.encode())
+            with lock:
+                sys.stdout.write(message + '\n')
+                sys.stdout.flush()
+                for neighbor in neighbors:
+                    neighbor.write_buffer += data  # send data to all neighbor nodes
+
+def start_node(name: str, my_addr: tuple[str, int],
+               inviter_addr: typing.Union[None, tuple[str, int]], option: str) -> None:
+    # prepare the neighbor list to be shared by all threads of this node
+    neighbors = []
+    # try to connect to the inviter
     if inviter_addr:
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -180,7 +266,7 @@ def start_node(name: str, my_addr: tuple[str, int],
             client_socket.connect(inviter_addr)
         except socket.timeout:
             sys.exit(make_header() + f'connection to the inviter ({inviter_addr}) timed out')
-        sys.stderr.write(make_header() + f'connected to the inviter ({inviter_addr})\n')
+        dump_to_stderr(f'connected to the inviter ({inviter_addr})\n')
         client_socket.settimeout(SOCKET_OPERATION_TIMEOUT_SECONDS)
         neighbors.append(Neighbor(client_socket, inviter_addr, b'', b''))
     # start the current node's listener part
@@ -192,53 +278,24 @@ def start_node(name: str, my_addr: tuple[str, int],
     lock = threading.Lock()
     listener_thread = threading.Thread(target = listener, args = (lock, server_socket, neighbors))
     listener_thread.start()
-    # start the GUI and the node's relayer part
-    root = tkinter.Tk()
-    root.title(f'{name} ({my_addr[0]}:{my_addr[1]})')
-    tkinter.Grid.rowconfigure(root, 0, weight = 1)
-    tkinter.Grid.rowconfigure(root, 1, weight = 1)
-    tkinter.Grid.columnconfigure(root, 0, weight = 1)
-    tkinter.Grid.columnconfigure(root, 1, weight = 1)
-    display_area = tkinter.scrolledtext.ScrolledText(root)
-    display_area.bind('<Key>', lambda e: 'break')
-    display_area.grid(row = 0, column = 0, columnspan = 2, sticky = 'NSEW')
-    entry_label = tkinter.ttk.Label(root, text = 'Type your message and hit Enter to send it: ')
-    entry_label.grid(row = 1, column = 0, sticky = 'NSEW')
-    entry_variable = tkinter.StringVar()
-    entry_area = tkinter.Entry(root, textvariable = entry_variable)
-    entry_area.grid(row = 1, column = 1, sticky = 'NSEW')
-    def handle_input(event: tkinter.Event) -> None:
-        nonlocal display_area, entry_variable
-        nonlocal lock, name, neighbors
-        entry_text = entry_variable.get()
-        entry_variable.set('')
-        message = make_header(name) + entry_text
-        data = make_packet(message.encode())
-        with lock:
-            display_area.insert(tkinter.INSERT, message + '\n')
-            for neighbor in neighbors:
-                neighbor.write_buffer += data  # append data to all neighbor nodes' buffers
-    entry_area.bind('<Key-Return>', handle_input)
-    def exit_program() -> None:
-        global HALTED
-        nonlocal root
-        nonlocal listener_thread, lock, relayer_thread
-        with lock:
-            HALTED = True
-        listener_thread.join()
-        relayer_thread.join()
-        root.destroy()
-    relayer_thread = threading.Thread(target = relayer, args = (lock, neighbors, display_area))
-    relayer_thread.start()
-    entry_area.focus_set()
-    root.protocol('WM_DELETE_WINDOW', exit_program)
-    root.mainloop()
+    # start the main loop based on the option (GUI/CLI)
+    if option == 'gui':
+        gui_loop(name, neighbors, lock, listener_thread)
+    elif option == 'cli':
+        cli_loop(name, neighbors, lock, listener_thread)
+    else:
+        stop_and_wait(lock, listener_thread, None)
+        sys.exit(make_header() + f'unknown or corrupted option "{option}"')
 
 if __name__ == '__main__':
-    if (len(sys.argv) != 4) and (len(sys.argv) != 6):
-        sys.exit(make_header() +
-                 f'python3 {sys.argv[0]} <name> <my-ip> <my-port> [inviter-ip] [inviter-port]')
-    name = sys.argv[1]
-    my_addr = (sys.argv[2], int(sys.argv[3]))
-    inviter_addr = None if len(sys.argv) == 4 else (sys.argv[4], int(sys.argv[5]))
-    start_node(name, my_addr, inviter_addr)
+    if (len(sys.argv) != 5) and (len(sys.argv) != 7):
+        sys.exit(
+            f'python3 {sys.argv[0]} '
+            '<gui/cli> <name> <my-ip> <my-port> [inviter-ip] [inviter-port]'
+        )
+    # TODO: add some argument checks
+    option = sys.argv[1]
+    name = sys.argv[2]
+    my_addr = (sys.argv[3], int(sys.argv[4]))
+    inviter_addr = None if len(sys.argv) == 5 else (sys.argv[5], int(sys.argv[6]))
+    start_node(name, my_addr, inviter_addr, option)
