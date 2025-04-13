@@ -1,5 +1,7 @@
 # p2p-tree
 
+![](https://github.com/sdingcn/p2p-tree/actions/workflows/run_test.yml/badge.svg)
+
 This is a peer-to-peer (P2P) group message application based on TCP.
 Group members are "nodes" where every node is an instance
 of the program (`node.py`) and acts as both server and client.
