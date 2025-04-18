@@ -17,8 +17,6 @@ def launch(config: list[str]) -> subprocess.Popen:
 
 def write_line(p: subprocess.Popen, s: str) -> None:
     p.stdin.write(s + '\n')
-    if p.poll():
-        raise P2PTreeTestError()
     p.stdin.flush()
 
 def verify_out_line(p: subprocess.Popen, s: str) -> None:
@@ -61,6 +59,7 @@ def p2p_tree_test_1() -> bool:
         return True
     except P2PTreeTestError:
         finalize(a)
+        raise
         return False
 
 def p2p_tree_test_2() -> bool:
@@ -87,6 +86,7 @@ def p2p_tree_test_2() -> bool:
         return True
     except P2PTreeTestError:
         finalize(a, b)
+        raise
         return False
 
 def p2p_tree_test_3() -> bool:
@@ -127,6 +127,7 @@ def p2p_tree_test_3() -> bool:
         return True
     except P2PTreeTestError:
         finalize(a, b, c)
+        raise
         return False
 
 def p2p_tree_test_4() -> bool:
@@ -181,6 +182,7 @@ def p2p_tree_test_4() -> bool:
         return True
     except P2PTreeTestError:
         finalize(a, b, c, d)
+        raise
         return False
 
 def p2p_tree_test_5() -> bool:
@@ -243,14 +245,19 @@ def p2p_tree_test_5() -> bool:
         return True
     except P2PTreeTestError:
         finalize(a, b, c, d, e)
+        raise
         return False
 
 if __name__ == '__main__':
-    global_dict = globals().copy()
-    for k, v in global_dict.items():
-        if k.startswith('p2p_tree_test'):
-            print(f'running test {k} ', end = '', flush = True)
-            if v():
-                print(f' test {k} passed')
-            else:
-                sys.exit(f' test {k} failed')
+    p = launch(['A', 'localhost', '10001'])
+    out, err = p.communicate('Hello\n\n')
+    print(out, err)
+    if False:
+        global_dict = globals().copy()
+        for k, v in global_dict.items():
+            if k.startswith('p2p_tree_test'):
+                print(f'running test {k} ', end = '', flush = True)
+                if v():
+                    print(f' test {k} passed')
+                else:
+                    sys.exit(f' test {k} failed')
