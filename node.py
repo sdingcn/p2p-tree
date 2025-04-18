@@ -55,8 +55,8 @@ class Neighbor:
         return (f'Neighbor {id(self.the_socket)} {self.the_socket.getsockname()} '
                 f'{self.remote_address} {self.read_buffer} {self.write_buffer}')
 
-def listener(lock: threading.Lock, server_socket: socket.socket,
-             neighbors: list[Neighbor]) -> None:
+def listener_core(lock: threading.Lock, server_socket: socket.socket,
+                  neighbors: list[Neighbor]) -> None:
     global HALTED
     round_counter = 0
     accept_counter = 0
@@ -82,8 +82,17 @@ def listener(lock: threading.Lock, server_socket: socket.socket,
         # round counter update
         round_counter += 1
 
-def relayer(lock: threading.Lock, neighbors: list[Neighbor],
-            output: typing.Callable[[str], None]) -> None:
+def listener(lock: threading.Lock, server_socket: socket.socket,
+             neighbors: list[Neighbor]) -> None:
+    global HALTED
+    try:
+        listener_core(lock, server_socket, neighbors)
+    except:
+        with lock:
+            HALTED = True
+
+def relayer_core(lock: threading.Lock, neighbors: list[Neighbor],
+                 output: typing.Callable[[str], None]) -> None:
     global PACKET_LENGTH_BYTES, HALTED
     round_counter = 0
     read_counter = 0
@@ -169,6 +178,15 @@ def relayer(lock: threading.Lock, neighbors: list[Neighbor],
             neighbors.extend(remaining_neighbors)  # cannot use '=' because that's re-binding
         # round counter update
         round_counter += 1
+
+def relayer(lock: threading.Lock, neighbors: list[Neighbor],
+            output: typing.Callable[[str], None]) -> None:
+    global HALTED
+    try:
+        relayer_core(lock, neighbors, output)
+    except:
+        with lock:
+            HALTED = True
 
 def stop_and_wait(lock: threading.Lock,
                  listener_thread: typing.Union[None, threading.Thread],

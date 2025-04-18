@@ -49,7 +49,7 @@ def finalize(*ps: subprocess.Popen) -> None:
 
 def p2p_tree_test_1() -> bool:
     try:
-        a = launch(['A', '127.0.0.1', '10001'])
+        a = launch(['A', 'localhost', '10001'])
         nap()
         write_line(a, 'This is A')
         verify_out_line(a, 'This is A')
@@ -63,9 +63,9 @@ def p2p_tree_test_1() -> bool:
 
 def p2p_tree_test_2() -> bool:
     try:
-        a = launch(['A', '127.0.0.1', '10001'])
+        a = launch(['A', 'localhost', '10001'])
         nap()
-        b = launch(['B', '127.0.0.1', '10002', '127.0.0.1', '10001'])
+        b = launch(['B', 'localhost', '10002', 'localhost', '10001'])
         nap()
         verify_err_line(a, 'accepted')
         verify_err_line(b, 'connected')
@@ -89,13 +89,13 @@ def p2p_tree_test_2() -> bool:
 
 def p2p_tree_test_3() -> bool:
     try:
-        a = launch(['A', '127.0.0.1', '10001'])
+        a = launch(['A', 'localhost', '10001'])
         nap()
-        b = launch(['B', '127.0.0.1', '10002', '127.0.0.1', '10001'])
+        b = launch(['B', 'localhost', '10002', 'localhost', '10001'])
         nap()
         verify_err_line(a, 'accepted')
         verify_err_line(b, 'connected')
-        c = launch(['C', '127.0.0.1', '10003', '127.0.0.1', '10002'])
+        c = launch(['C', 'localhost', '10003', 'localhost', '10002'])
         nap()
         verify_err_line(b, 'accepted')
         verify_err_line(c, 'connected')
@@ -129,17 +129,17 @@ def p2p_tree_test_3() -> bool:
 
 def p2p_tree_test_4() -> bool:
     try:
-        a = launch(['A', '127.0.0.1', '10001'])
+        a = launch(['A', 'localhost', '10001'])
         nap()
-        b = launch(['B', '127.0.0.1', '10002', '127.0.0.1', '10001'])
+        b = launch(['B', 'localhost', '10002', 'localhost', '10001'])
         nap()
         verify_err_line(a, 'accepted')
         verify_err_line(b, 'connected')
-        c = launch(['C', '127.0.0.1', '10003', '127.0.0.1', '10001'])
+        c = launch(['C', 'localhost', '10003', 'localhost', '10001'])
         nap()
         verify_err_line(a, 'accepted')
         verify_err_line(c, 'connected')
-        d = launch(['D', '127.0.0.1', '10004', '127.0.0.1', '10001'])
+        d = launch(['D', 'localhost', '10004', 'localhost', '10001'])
         nap()
         verify_err_line(a, 'accepted')
         verify_err_line(d, 'connected')
@@ -183,21 +183,21 @@ def p2p_tree_test_4() -> bool:
 
 def p2p_tree_test_5() -> bool:
     try:
-        a = launch(['A', '127.0.0.1', '10001'])
+        a = launch(['A', 'localhost', '10001'])
         nap()
-        b = launch(['B', '127.0.0.1', '10002', '127.0.0.1', '10001'])
+        b = launch(['B', 'localhost', '10002', 'localhost', '10001'])
         nap()
         verify_err_line(a, 'accepted')
         verify_err_line(b, 'connected')
-        c = launch(['C', '127.0.0.1', '10003', '127.0.0.1', '10002'])
+        c = launch(['C', 'localhost', '10003', 'localhost', '10002'])
         nap()
         verify_err_line(b, 'accepted')
         verify_err_line(c, 'connected')
-        d = launch(['D', '127.0.0.1', '10004', '127.0.0.1', '10003'])
+        d = launch(['D', 'localhost', '10004', 'localhost', '10003'])
         nap()
         verify_err_line(c, 'accepted')
         verify_err_line(d, 'connected')
-        e = launch(['E', '127.0.0.1', '10005', '127.0.0.1', '10004'])
+        e = launch(['E', 'localhost', '10005', 'localhost', '10004'])
         nap()
         verify_err_line(d, 'accepted')
         verify_err_line(e, 'connected')
