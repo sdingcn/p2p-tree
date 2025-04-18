@@ -4,9 +4,12 @@ import socket
 import sys
 import threading
 import time
-import tkinter
-import tkinter.scrolledtext
-import tkinter.ttk
+try:
+    import tkinter
+    import tkinter.scrolledtext
+    import tkinter.ttk
+except ModuleNotFoundError:
+    pass
 import typing
 
 SOCKET_CONNECTION_TIMEOUT_SECONDS = 10

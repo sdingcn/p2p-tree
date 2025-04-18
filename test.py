@@ -2,10 +2,18 @@ import sys
 import subprocess
 import time
 
+SUBPROCESS_LIST = []
+
+def clean() -> None:
+    global SUBPROCESS_LIST
+    for p in SUBPROCESS_LIST:
+        p.kill()
+
 class P2PTreeTestError(Exception):
     pass
 
 def launch(config: list[str]) -> subprocess.Popen:
+    global SUBPROCESS_LIST
     p = subprocess.Popen(args = ['python3', 'node.py', 'cli'] + config,
                          stdin = subprocess.PIPE,
                          stdout = subprocess.PIPE,
@@ -13,6 +21,7 @@ def launch(config: list[str]) -> subprocess.Popen:
                          text = True)
     if p.poll():
         raise P2PTreeTestError()
+    SUBPROCESS_LIST.append(p)
     return p
 
 def write_line(p: subprocess.Popen, s: str) -> None:
@@ -38,16 +47,7 @@ def verify_termination(p: subprocess.Popen) -> None:
 def nap() -> None:
     time.sleep(1)
 
-def finalize(*ps: subprocess.Popen) -> None:
-    sys.stderr.write(f'finalizing {len(ps)} processes...\n')
-    for p in ps:
-        if p.poll() is None:
-            write_line(p, '')  # first ask the process to terminate
-            nap()
-            if p.poll() is None:  # if the process still doesn't terminate then kill it
-                p.kill()
-
-def p2p_tree_test_1() -> bool:
+def p2p_tree_test_1() -> None:
     try:
         a = launch(['A', 'localhost', '10001'])
         nap()
@@ -56,13 +56,11 @@ def p2p_tree_test_1() -> bool:
         write_line(a, '')
         nap()
         verify_termination(a)
-        return True
     except P2PTreeTestError:
-        finalize(a)
+        clean()
         raise
-        return False
 
-def p2p_tree_test_2() -> bool:
+def p2p_tree_test_2() -> None:
     try:
         a = launch(['A', 'localhost', '10001'])
         nap()
@@ -83,13 +81,11 @@ def p2p_tree_test_2() -> bool:
         write_line(a, '')
         nap()
         verify_termination(a)
-        return True
     except P2PTreeTestError:
-        finalize(a, b)
+        clean()
         raise
-        return False
 
-def p2p_tree_test_3() -> bool:
+def p2p_tree_test_3() -> None:
     try:
         a = launch(['A', 'localhost', '10001'])
         nap()
@@ -124,13 +120,11 @@ def p2p_tree_test_3() -> bool:
         write_line(c, '')
         nap()
         verify_termination(c)
-        return True
     except P2PTreeTestError:
-        finalize(a, b, c)
+        clean()
         raise
-        return False
 
-def p2p_tree_test_4() -> bool:
+def p2p_tree_test_4() -> None:
     try:
         a = launch(['A', 'localhost', '10001'])
         nap()
@@ -179,13 +173,11 @@ def p2p_tree_test_4() -> bool:
         write_line(a, '')
         nap()
         verify_termination(a)
-        return True
     except P2PTreeTestError:
-        finalize(a, b, c, d)
+        clean()
         raise
-        return False
 
-def p2p_tree_test_5() -> bool:
+def p2p_tree_test_5() -> None:
     try:
         a = launch(['A', 'localhost', '10001'])
         nap()
@@ -242,22 +234,14 @@ def p2p_tree_test_5() -> bool:
         write_line(d, '')
         nap()
         verify_termination(d)
-        return True
     except P2PTreeTestError:
-        finalize(a, b, c, d, e)
+        clean()
         raise
-        return False
 
 if __name__ == '__main__':
-    p = launch(['A', 'localhost', '10001'])
-    out, err = p.communicate('Hello\n\n')
-    print(out, err)
-    if False:
-        global_dict = globals().copy()
-        for k, v in global_dict.items():
-            if k.startswith('p2p_tree_test'):
-                print(f'running test {k} ', end = '', flush = True)
-                if v():
-                    print(f' test {k} passed')
-                else:
-                    sys.exit(f' test {k} failed')
+    global_dict = globals().copy()
+    for k, v in global_dict.items():
+        if k.startswith('p2p_tree_test'):
+            print(f'running test {k} ', end = '', flush = True)
+            v()
+            print()
