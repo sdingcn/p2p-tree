@@ -6,11 +6,14 @@ class P2PTreeTestError(Exception):
     pass
 
 def launch(config: list[str]) -> subprocess.Popen:
-    return subprocess.Popen(args = ['python3', 'node.py', 'cli'] + config,
-                            stdin = subprocess.PIPE,
-                            stdout = subprocess.PIPE,
-                            stderr = subprocess.PIPE,
-                            text = True)
+    p = subprocess.Popen(args = ['python3', 'node.py', 'cli'] + config,
+                         stdin = subprocess.PIPE,
+                         stdout = subprocess.PIPE,
+                         stderr = subprocess.PIPE,
+                         text = True)
+    if p.poll():
+        raise P2PTreeTestError()
+    return p
 
 def write_line(p: subprocess.Popen, s: str) -> None:
     p.stdin.write(s + '\n')
