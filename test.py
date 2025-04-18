@@ -17,6 +17,8 @@ def launch(config: list[str]) -> subprocess.Popen:
 
 def write_line(p: subprocess.Popen, s: str) -> None:
     p.stdin.write(s + '\n')
+    if p.poll():
+        raise P2PTreeTestError()
     p.stdin.flush()
 
 def verify_out_line(p: subprocess.Popen, s: str) -> None:
