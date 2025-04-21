@@ -206,7 +206,7 @@ def stop_and_wait(lock: threading.Lock,
 def gui_loop(name: str, neighbors: list[Neighbor], lock: threading.Lock,
              listener_thread: typing.Union[None, threading.Thread]) -> None:
     root = tkinter.Tk()
-    root.title('p2p-tree')
+    root.title('p2p-tree-relay')
     root.resizable(False, False)
     root.rowconfigure(0, weight = 1)
     root.columnconfigure(0, weight = 1)
