@@ -10,6 +10,8 @@ connections with its invited members and the member that invited it.
 The first member of a group has no inviter.
 A group's topology is a tree and messages are relayed by nodes on the tree.
 
+![GUI](gui-example.png)
+
 ## usage
 
 There are two modes of usage: GUI and CLI.
@@ -36,6 +38,6 @@ Packets (over TCP) are of fixed-length (128 bytes).
 The disconnection of one node may split the group (tree)
 into multiple smaller groups.
 
-## NAT
+## TODOs
 
-NAT hole punching is not supported.
+Encryption and NAT hole punching are currently not supported.
