@@ -12,6 +12,7 @@ except ModuleNotFoundError:
     pass
 import typing
 
+# TODO: reduce the number of global variables
 SOCKET_CONNECTION_TIMEOUT_SECONDS = 10
 SOCKET_OPERATION_TIMEOUT_SECONDS = 0.1
 SELECT_TIMEOUT_SECONDS = 0.1
@@ -90,7 +91,7 @@ def listener(lock: threading.Lock, server_socket: socket.socket,
     global HALTED
     try:
         listener_core(lock, server_socket, neighbors)
-    except:
+    except:  # when one thread throws exceptions, let all other threads terminate through HALTED
         with lock:
             HALTED = True
 
@@ -187,7 +188,7 @@ def relayer(lock: threading.Lock, neighbors: list[Neighbor],
     global HALTED
     try:
         relayer_core(lock, neighbors, output)
-    except:
+    except:  # when one thread throws exceptions, let all other threads terminate through HALTED
         with lock:
             HALTED = True
 
@@ -319,4 +320,8 @@ if __name__ == '__main__':
     name = sys.argv[2]
     my_address = (sys.argv[3], int(sys.argv[4]))
     inviter_address = None if len(sys.argv) == 5 else (sys.argv[5], int(sys.argv[6]))
-    start_node(name, my_address, inviter_address, option)
+    try:
+        start_node(name, my_address, inviter_address, option)
+    except:  # when one thread throws exceptions, let all other threads terminate through HALTED
+        with lock:
+            HALTED = True

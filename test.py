@@ -24,6 +24,8 @@ def launch(config: list[str]) -> subprocess.Popen:
     SUBPROCESS_LIST.append(p)
     return p
 
+# TODO: add timeouts for the read/write operations
+
 def write_line(p: subprocess.Popen, s: str) -> None:
     p.stdin.write(s + '\n')
     p.stdin.flush()
